@@ -1,5 +1,3 @@
-# schemas.py
-
 from pydantic import BaseModel, EmailStr, validator, Field
 from typing import Optional, List
 from datetime import datetime
