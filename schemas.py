@@ -4,6 +4,12 @@ from typing import Optional, List
 class UserBase(BaseModel):
     name: str
     email: EmailStr
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
 
 class UserCreate(UserBase):
     password: str

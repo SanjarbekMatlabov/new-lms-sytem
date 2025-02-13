@@ -4,6 +4,11 @@ from database import get_db
 from crud import create_user, get_users, get_user, delete_user, create_branch, get_branches, get_branch, create_group, get_groups, get_group, add_student_to_group, get_students_by_group
 from schemas import UserCreate, UserResponse, BranchCreate, BranchResponse, GroupCreate, GroupResponse, StudentGroupCreate, StudentGroupResponse
 from auth import get_current_user
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.orm import Session
+from auth import create_access_token, verify_password, get_password_hash
+from crud import get_user_by_username
+from schemas import Token
 
 app = FastAPI()
 
@@ -16,7 +21,18 @@ def check_role(required_roles: list):
             )
         return user
     return role_checker
-
+@app.post("/login", response_model=Token)
+def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = get_user_by_username(db, form_data.username)
+    if not user or not verify_password(form_data.password, user.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    access_token = create_access_token(data={"sub": user.username})
+    return {"access_token": access_token, "token_type": "bearer"}
 @app.post("/users/", response_model=UserResponse, dependencies=[Depends(check_role(["superadmin", "admin"]))])
 def create_new_user(user: UserCreate, db: Session = Depends(get_db)):
     return create_user(db, user)
