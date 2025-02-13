@@ -1,38 +1,84 @@
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
+# models.py
+
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, DateTime
 from sqlalchemy.orm import relationship
+from datetime import datetime
 from database import Base
 
 class User(Base):
     __tablename__ = "users"
+
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, index=True)
-    email = Column(String, unique=True, index=True)
-    password_hash = Column(String)
-    is_admin = Column(Boolean, default=False)
-    is_super_admin = Column(Boolean, default=False)
-    is_student = Column(Boolean, default=False)
-    is_teacher = Column(Boolean, default=False)
-    branch_id = Column(Integer, ForeignKey("branches.id"))
-    branch = relationship("Branch",back_populates='users')
-    group = relationship("Group",back_populates='teacher')
+    username = Column(String(50), unique=True, index=True, nullable=False)
+    email = Column(String(100), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    role = Column(String(20), nullable=False)  # teacher, admin, superadmin
+    branch_id = Column(Integer, ForeignKey("branches.id"), nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    branch = relationship("Branch", back_populates="users")
+    teacher_groups = relationship("Group", back_populates="teacher")
+    student_groups = relationship("StudentGroup", back_populates="student")
+    
+    def __repr__(self):
+        return f"User(id={self.id}, username={self.username}, role={self.role})"
 
 class Branch(Base):
     __tablename__ = "branches"
+
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, index=True,unique=True)
-    users = relationship("User",back_populates='branch')
+    name = Column(String(100), unique=True, index=True, nullable=False)
+    address = Column(String(255))
+    phone = Column(String(20))
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    users = relationship("User", back_populates="branch")
+    groups = relationship("Group", back_populates="branch")
+
+    def __repr__(self):
+        return f"Branch(id={self.id}, name={self.name})"
 
 class Group(Base):
     __tablename__ = "groups"
+
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, index=True)
-    teaacher = relationship("User", back_populates="groups")
-    students = relationship("StudentGroup", back_populates="group")
+    name = Column(String(100), index=True, nullable=False)
+    branch_id = Column(Integer, ForeignKey("branches.id"), nullable=False)
+    teacher_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    capacity = Column(Integer, default=30)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    branch = relationship("Branch", back_populates="groups")
+    teacher = relationship("User", back_populates="teacher_groups")
+    student_groups = relationship("StudentGroup", back_populates="group")
+    students = relationship("User", secondary="student_groups",back_populates="student_groups")
+
+    def __repr__(self):
+        return f"Group(id={self.id}, name={self.name})"
 
 class StudentGroup(Base):
     __tablename__ = "student_groups"
+
     id = Column(Integer, primary_key=True, index=True)
-    student_id = Column(Integer, ForeignKey("users.id"))
-    group_id = Column(Integer, ForeignKey("groups.id"))
-    group = relationship("Group", back_populates="students")
-    
+    student_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
+    joined_date = Column(DateTime, default=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    student = relationship("User", back_populates="student_groups")
+    group = relationship("Group", back_populates="student_groups")
+
+    def __repr__(self):
+        return f"StudentGroup(student_id={self.student_id}, group_id={self.group_id})"
