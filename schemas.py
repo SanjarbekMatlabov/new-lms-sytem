@@ -2,7 +2,6 @@ from pydantic import BaseModel, EmailStr, validator, Field
 from typing import Optional, List
 from datetime import datetime
 
-# Token schemas
 class Token(BaseModel):
     access_token: str
     token_type: str

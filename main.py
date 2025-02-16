@@ -7,20 +7,17 @@ from datetime import datetime, timedelta
 from jose import JWTError, jwt
 import bcrypt
 
-# Project files
 from database import Base, engine, SessionLocal
 from models import User, Branch, Group, StudentGroup
 from constants import ROLE_TEACHER, ROLE_ADMIN, ROLE_SUPERADMIN
 from schemas import BranchCreate, BranchResponse, BranchUpdate, GroupCreate, GroupResponse, StudentGroupCreate, StudentGroupResponse, SuperAdminCreate, Token, UserCreate, UserResponse
 
-# Constants
 SECRET_KEY = "a"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 app = FastAPI(title="LMS API")
 
-# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -106,7 +103,6 @@ async def create_user(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    # Check permissions
     if current_user.role == ROLE_TEACHER:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
