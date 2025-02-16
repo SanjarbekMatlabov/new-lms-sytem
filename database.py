@@ -21,10 +21,8 @@ SessionLocal = sessionmaker(
 )
 
 Base = declarative_base()
-
-def init_db():
-    from models import User, Branch, Group, StudentGroup
-    Base.metadata.create_all(bind=engine)
+from models import User, Branch, Group, StudentGroup
+Base.metadata.create_all(bind=engine)
 
 def get_db():
     db = SessionLocal()

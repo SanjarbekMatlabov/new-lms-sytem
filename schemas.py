@@ -96,6 +96,7 @@ class GroupResponse(GroupBase):
         orm_mode = True
 
 class StudentGroupBase(BaseModel):
+    name:str
     student_id: int
     group_id: int
 

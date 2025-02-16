@@ -66,6 +66,7 @@ class StudentGroup(Base):
     __tablename__ = "student_groups"
     
     id = Column(Integer, primary_key=True, index=True)
+    name = Column(String)
     student_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
     joined_date = Column(DateTime, default=datetime.utcnow)

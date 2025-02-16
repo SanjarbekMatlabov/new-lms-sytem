@@ -11,7 +11,7 @@ import bcrypt
 from database import Base, engine, SessionLocal
 from models import User, Branch, Group, StudentGroup
 from constants import ROLE_TEACHER, ROLE_ADMIN, ROLE_SUPERADMIN
-from schemas import BranchCreate, BranchResponse, BranchUpdate, GroupCreate, GroupResponse, SuperAdminCreate, Token, UserCreate, UserResponse
+from schemas import BranchCreate, BranchResponse, BranchUpdate, GroupCreate, GroupResponse, StudentGroupCreate, StudentGroupResponse, SuperAdminCreate, Token, UserCreate, UserResponse
 
 # Constants
 SECRET_KEY = "a"
@@ -407,3 +407,16 @@ def delete_branch(
            status_code=status.HTTP_400_BAD_REQUEST,
            detail=str(e)
        )
+@app.post("/students/", response_model=StudentGroupResponse)
+def create_student(student_data: StudentGroupCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role not in [ROLE_SUPERADMIN, ROLE_ADMIN]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins and superadmins can create students"
+        )
+    
+    new_student = StudentGroup(**student_data.dict(), created_at=datetime.utcnow(), updated_at=datetime.utcnow(), is_active=True)
+    db.add(new_student)
+    db.commit()
+    db.refresh(new_student)
+    return new_student
