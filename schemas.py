@@ -7,6 +7,12 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
+class SuperAdminCreate(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
+    branch_id: Optional[int] = None
+
 class TokenData(BaseModel):
     username: Optional[str] = None
 

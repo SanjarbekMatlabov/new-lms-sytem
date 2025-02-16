@@ -11,7 +11,7 @@ import bcrypt
 from database import Base, engine, SessionLocal
 from models import User, Branch, Group, StudentGroup
 from constants import ROLE_TEACHER, ROLE_ADMIN, ROLE_SUPERADMIN
-from schemas import Token, UserCreate, UserResponse
+from schemas import BranchCreate, BranchResponse, BranchUpdate, GroupCreate, GroupResponse, SuperAdminCreate, Token, UserCreate, UserResponse
 
 # Constants
 SECRET_KEY = "a"
@@ -157,7 +157,6 @@ async def get_users(
     elif current_user.role == ROLE_ADMIN:
         users = db.query(User).filter(User.branch_id == current_user.branch_id).all()
     elif current_user.role == ROLE_TEACHER:
-        # Get students from teacher's groups
         student_ids = (
             db.query(StudentGroup.student_id)
             .join(Group)
@@ -172,11 +171,9 @@ async def get_users(
         )
     return users
 
-@app.get("/groups/", response_model=List[dict])
-async def get_groups(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+
+@app.get("/groups/", response_model=List[GroupResponse])
+def get_groups(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role == ROLE_SUPERADMIN:
         groups = db.query(Group).all()
     elif current_user.role == ROLE_ADMIN:
@@ -190,38 +187,28 @@ async def get_groups(
         )
     return groups
 
-@app.post("/groups/", response_model=dict)
-async def create_group(
-    group_data: dict,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+@app.post("/groups/", response_model=GroupResponse)
+def create_group(group_data: GroupCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role == ROLE_TEACHER:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Teachers cannot create groups"
         )
     
-    if current_user.role == ROLE_ADMIN and group_data["branch_id"] != current_user.branch_id:
+    if current_user.role == ROLE_ADMIN and group_data.branch_id != current_user.branch_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin can only create groups in their own branch"
         )
 
-    new_group = Group(**group_data)
+    new_group = Group(**group_data.dict(), is_active=True, created_at=datetime.utcnow(), updated_at=datetime.utcnow())
     db.add(new_group)
     db.commit()
     db.refresh(new_group)
     return new_group
 
 @app.post("/groups/{group_id}/students/{student_id}")
-async def add_student_to_group(
-    group_id: int,
-    student_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    # Check if group exists
+def add_student_to_group(group_id: int, student_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     group = db.query(Group).filter(Group.id == group_id).first()
     if not group:
         raise HTTPException(
@@ -229,7 +216,6 @@ async def add_student_to_group(
             detail="Group not found"
         )
 
-    # Check permissions
     if current_user.role == ROLE_TEACHER and group.teacher_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -241,7 +227,183 @@ async def add_student_to_group(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin can only add students to groups in their branch"
         )
+    
     student_group = StudentGroup(student_id=student_id, group_id=group_id)
     db.add(student_group)
     db.commit()
     return {"message": "Student added to group successfully"}
+
+@app.post("/create-first-admin/", response_model=UserResponse)
+def create_first_admin(admin: SuperAdminCreate, db: Session = Depends(get_db)):
+    if db.query(User).filter(User.role == "superadmin").first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Admin already exists"
+        )
+    
+    hashed_password = get_password_hash(admin.password)
+    db_admin = User(
+        username=admin.username,
+        email=admin.email,
+        hashed_password=hashed_password,
+        role="superadmin",
+        branch_id=admin.branch_id,
+        is_active=True
+    )
+    
+    try:
+        db.add(db_admin)
+        db.commit()
+        db.refresh(db_admin)
+        return db_admin
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from typing import List
+
+@app.post("/branches/", response_model=BranchResponse)
+def create_branch(
+   branch: BranchCreate,
+   db: Session = Depends(get_db),
+   current_user: User = Depends(get_current_user)
+):
+   if current_user.role not in ["superadmin"]:
+       raise HTTPException(
+           status_code=status.HTTP_403_FORBIDDEN,
+           detail="Only admin can create branches"
+       )
+   
+   if db.query(Branch).filter(Branch.name == branch.name).first():
+       raise HTTPException(
+           status_code=status.HTTP_400_BAD_REQUEST,
+           detail="Branch with this name already exists"
+       )
+   
+   db_branch = Branch(
+       name=branch.name,
+       address=branch.address,
+       phone=branch.phone,
+       is_active=True
+   )
+   
+   try:
+       db.add(db_branch)
+       db.commit()
+       db.refresh(db_branch)
+       return db_branch
+   except Exception as e:
+       db.rollback()
+       raise HTTPException(
+           status_code=status.HTTP_400_BAD_REQUEST,
+           detail=str(e)
+       )
+
+@app.get("/branches/", response_model=List[BranchResponse])
+def get_branches(
+   skip: int = 0,
+   limit: int = 100,
+   db: Session = Depends(get_db),
+   current_user: User = Depends(get_current_user)
+):
+   branches = db.query(Branch).offset(skip).limit(limit).all()
+   return branches
+
+@app.get("/branches/{branch_id}", response_model=BranchResponse)
+def get_branch(
+   branch_id: int,
+   db: Session = Depends(get_db),
+   current_user: User = Depends(get_current_user)
+):
+   branch = db.query(Branch).filter(Branch.id == branch_id).first()
+   if not branch:
+       raise HTTPException(
+           status_code=status.HTTP_404_NOT_FOUND,
+           detail="Branch not found"
+       )
+   return branch
+
+@app.put("/branches/{branch_id}", response_model=BranchResponse)
+def update_branch(
+   branch_id: int,
+   branch_update: BranchUpdate,
+   db: Session = Depends(get_db),
+   current_user: User = Depends(get_current_user)
+):
+   if current_user.role not in [ "superadmin"]:
+       raise HTTPException(
+           status_code=status.HTTP_403_FORBIDDEN,
+           detail="Only admins can update branches"
+       )
+
+   db_branch = db.query(Branch).filter(Branch.id == branch_id).first()
+   if not db_branch:
+       raise HTTPException(
+           status_code=status.HTTP_404_NOT_FOUND,
+           detail="Branch not found"
+       )
+   
+   if branch_update.name is not None:
+       existing_branch = db.query(Branch).filter(
+           Branch.name == branch_update.name,
+           Branch.id != branch_id
+       ).first()
+       if existing_branch:
+           raise HTTPException(
+               status_code=status.HTTP_400_BAD_REQUEST,
+               detail="Branch with this name already exists"
+           )
+       db_branch.name = branch_update.name
+   
+   if branch_update.address is not None:
+       db_branch.address = branch_update.address
+   if branch_update.phone is not None:
+       db_branch.phone = branch_update.phone
+   if branch_update.is_active is not None:
+       db_branch.is_active = branch_update.is_active
+
+   try:
+       db.commit()
+       db.refresh(db_branch)
+       return db_branch
+   except Exception as e:
+       db.rollback()
+       raise HTTPException(
+           status_code=status.HTTP_400_BAD_REQUEST,
+           detail=str(e)
+       )
+
+@app.delete("/branches/{branch_id}", response_model=BranchResponse)
+def delete_branch(
+   branch_id: int,
+   db: Session = Depends(get_db),
+   current_user: User = Depends(get_current_user)
+):
+   if current_user.role not in ["admin", "superadmin"]:
+       raise HTTPException(
+           status_code=status.HTTP_403_FORBIDDEN,
+           detail="Only admins can delete branches"
+       )
+
+   branch = db.query(Branch).filter(Branch.id == branch_id).first()
+   if not branch:
+       raise HTTPException(
+           status_code=status.HTTP_404_NOT_FOUND,
+           detail="Branch not found"
+       )
+   branch.is_active = False
+   
+   try:
+       db.commit()
+       db.refresh(branch)
+       return branch
+   except Exception as e:
+       db.rollback()
+       raise HTTPException(
+           status_code=status.HTTP_400_BAD_REQUEST,
+           detail=str(e)
+       )
