@@ -229,38 +229,35 @@ def add_student_to_group(group_id: int, student_id: int, current_user: User = De
     db.commit()
     return {"message": "Student added to group successfully"}
 
-@app.post("/create-first-admin/", response_model=UserResponse)
-def create_first_admin(admin: SuperAdminCreate, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.role == "superadmin").first():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Admin already exists"
-        )
+# @app.post("/create-first-admin/", response_model=UserResponse)
+# def create_first_admin(admin: SuperAdminCreate, db: Session = Depends(get_db)):
+#     if db.query(User).filter(User.role == "superadmin").first():
+#         raise HTTPException(
+#             status_code=status.HTTP_400_BAD_REQUEST,
+#             detail="Admin already exists"
+#         )
     
-    hashed_password = get_password_hash(admin.password)
-    db_admin = User(
-        username=admin.username,
-        email=admin.email,
-        hashed_password=hashed_password,
-        role="superadmin",
-        branch_id=admin.branch_id,
-        is_active=True
-    )
+#     hashed_password = get_password_hash(admin.password)
+#     db_admin = User(
+#         username=admin.username,
+#         email=admin.email,
+#         hashed_password=hashed_password,
+#         role="superadmin",
+#         branch_id=admin.branch_id,
+#         is_active=True
+#     )
     
-    try:
-        db.add(db_admin)
-        db.commit()
-        db.refresh(db_admin)
-        return db_admin
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from typing import List
+#     try:
+#         db.add(db_admin)
+#         db.commit()
+#         db.refresh(db_admin)
+#         return db_admin
+#     except Exception as e:
+#         db.rollback()
+#         raise HTTPException(
+#             status_code=status.HTTP_400_BAD_REQUEST,
+#             detail=str(e)
+#         )
 
 @app.post("/branches/", response_model=BranchResponse)
 def create_branch(
@@ -416,3 +413,19 @@ def create_student(student_data: StudentGroupCreate, current_user: User = Depend
     db.commit()
     db.refresh(new_student)
     return new_student
+
+
+@app.get("/branches/students/{group_id}")
+def get_students_in_group(
+    group_id: int, 
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required"
+        )
+
+    students = db.query(StudentGroup).filter(StudentGroup.group_id == group_id).all()
+    return students
