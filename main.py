@@ -203,32 +203,6 @@ def create_group(group_data: GroupCreate, current_user: User = Depends(get_curre
     db.refresh(new_group)
     return new_group
 
-@app.post("/groups/{group_id}/students/{student_id}")
-def add_student_to_group(group_id: int, student_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    group = db.query(Group).filter(Group.id == group_id).first()
-    if not group:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Group not found"
-        )
-
-    if current_user.role == ROLE_TEACHER and group.teacher_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Teachers can only add students to their own groups"
-        )
-    
-    if current_user.role == ROLE_ADMIN and group.branch_id != current_user.branch_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin can only add students to groups in their branch"
-        )
-    
-    student_group = StudentGroup(student_id=student_id, group_id=group_id)
-    db.add(student_group)
-    db.commit()
-    return {"message": "Student added to group successfully"}
-
 # @app.post("/create-first-admin/", response_model=UserResponse)
 # def create_first_admin(admin: SuperAdminCreate, db: Session = Depends(get_db)):
 #     if db.query(User).filter(User.role == "superadmin").first():
@@ -415,8 +389,9 @@ def create_student(student_data: StudentGroupCreate, current_user: User = Depend
     return new_student
 
 
-@app.get("/branches/students/{group_id}")
+@app.get("/branches/{branch_id}/students/{group_id}")
 def get_students_in_group(
+    branch_id: int,
     group_id: int, 
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -425,6 +400,11 @@ def get_students_in_group(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required"
+        )
+    if current_user.role not in ["superadmin", "admin"] or current_user.branch_id != branch_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: You can only access students in your own branch"
         )
 
     students = db.query(StudentGroup).filter(StudentGroup.group_id == group_id).all()
